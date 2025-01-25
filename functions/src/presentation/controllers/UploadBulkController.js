@@ -3,6 +3,7 @@ const path = require("path");
 const os = require("os");
 const fs = require("fs");
 const Busboy = require("busboy");
+const cors = require("cors")({ origin: true });
 const {
   initFirebase,
 } = require("@infrastructure/data/firebase/FirebaseConfig");
@@ -10,104 +11,100 @@ const {
 const { storage } = initFirebase();
 
 const uploadBulk = onRequest(async (req, res) => {
-  if (req.method !== "POST") {
-    return res.status(405).send("Método no permitido. Usa POST.");
-  }
+  cors(req, res, async () => {
+    if (req.method === "OPTIONS") {
+      res.set("Access-Control-Allow-Origin", "*");
+      res.set("Access-Control-Allow-Methods", "POST");
+      res.set("Access-Control-Allow-Headers", "Content-Type");
+      res.status(204).send("");
+      return;
+    }
 
-  if (!req.headers["content-type"]?.startsWith("multipart/form-data")) {
-    return res
-      .status(400)
-      .send("El encabezado 'Content-Type' debe ser 'multipart/form-data'.");
-  }
+    if (req.method !== "POST") {
+      return res.status(405).send("Método no permitido. Usa POST.");
+    }
 
-  const tmpdir = os.tmpdir();
-  const busboy = Busboy({ headers: req.headers });
+    if (!req.headers["content-type"]?.startsWith("multipart/form-data")) {
+      return res
+        .status(400)
+        .send("El encabezado 'Content-Type' debe ser 'multipart/form-data'.");
+    }
 
-  // Estructuras para almacenar los archivos y campos procesados
-  const uploads = {};
-  const fields = {};
-  const fileWrites = [];
+    const tmpdir = os.tmpdir();
+    const busboy = Busboy({ headers: req.headers });
 
-  // Procesar campos no archivo
-  busboy.on("field", (fieldname, val) => {
-    console.log(`Campo procesado: ${fieldname} = ${val}`);
-    fields[fieldname] = val;
-  });
+    const uploads = []; // Lista para almacenar promesas de subida
 
-  // Procesar archivos subidos
-  busboy.on("file", (fieldname, file, { filename, mimetype }) => {
-    console.log("🚀 ~ busboy.on ~ mimetype:", mimetype);
-    // if (mimetype !== "audio/mpeg") {
-    //   console.warn(`Archivo ignorado: ${filename} (tipo no permitido)`);
-    //   file.resume();
-    //   return;
-    // }
+    busboy.on("file", (fieldname, file, { filename, mimetype }) => {
+      console.log(`Procesando archivo: ${filename}`);
+      const filepath = path.join(tmpdir, filename);
 
-    console.log(`Procesando archivo: ${filename}`);
-    const filepath = path.join(tmpdir, filename);
-    uploads[fieldname] = filepath;
+      const writeStream = fs.createWriteStream(filepath);
+      file.pipe(writeStream);
 
-    const writeStream = fs.createWriteStream(filepath);
-    file.pipe(writeStream);
+      const uploadPromise = new Promise((resolve, reject) => {
+        file.on("end", () => {
+          writeStream.end();
+        });
 
-    const promise = new Promise((resolve, reject) => {
-      file.on("end", () => {
-        writeStream.end();
+        writeStream.on("close", async () => {
+          try {
+            const bucket = storage.bucket();
+            const destinationPath = `songs/${filename}`;
+
+            console.log(`Subiendo archivo a Storage: ${filename}`);
+
+            // Subida del archivo al bucket
+            const [uploadedFile] = await bucket.upload(filepath, {
+              destination: destinationPath,
+              contentType: mimetype || "audio/mpeg",
+              public: true,
+            });
+
+            // Hacer público el archivo y obtener la URL
+            await uploadedFile.makePublic();
+            const publicUrl = uploadedFile.publicUrl();
+
+            console.log(`Archivo subido exitosamente: ${filename}`);
+            resolve({ filename, url: publicUrl });
+          } catch (error) {
+            console.error(`Error subiendo archivo ${filename}:`, error);
+            reject(error);
+          } finally {
+            fs.unlinkSync(filepath); // Eliminar archivo temporal
+          }
+        });
+
+        writeStream.on("error", (error) => {
+          console.error(`Error procesando archivo ${filename}:`, error);
+          reject(error);
+        });
       });
-      writeStream.on("close", resolve);
-      writeStream.on("error", reject);
+
+      uploads.push(uploadPromise);
     });
 
-    fileWrites.push(promise);
-  });
+    busboy.on("finish", async () => {
+      try {
+        const uploadedFiles = await Promise.all(uploads);
 
-  // Finalizar procesamiento de archivos
-  busboy.on("finish", async () => {
-    try {
-      await Promise.all(fileWrites);
-
-      const bucket = storage.bucket();
-      const uploadedFiles = [];
-
-      // Subir cada archivo procesado a Firebase Storage
-      for (const fieldname in uploads) {
-        const filepath = uploads[fieldname];
-        const filename = path.basename(filepath);
-        const destination = `songs/${filename}`;
-
-        console.log(`Subiendo archivo a Storage: ${filename}`);
-        const fileRef = bucket.file(destination);
-
-        await fileRef.save(fs.readFileSync(filepath), {
-          metadata: { contentType: "audio/mpeg" },
+        res.status(200).send({
+          message: `Se subieron ${uploadedFiles.length} archivo(s) correctamente.`,
+          files: uploadedFiles,
         });
-
-        const [url] = await fileRef.getSignedUrl({
-          action: "read",
-          expires: "03-01-2030",
-        });
-
-        uploadedFiles.push({ filename, url });
-        fs.unlinkSync(filepath); // Eliminar archivo temporal
+      } catch (error) {
+        console.error("Error al procesar archivos:", error);
+        res.status(500).send("Error interno al procesar la solicitud.");
       }
+    });
 
-      res.status(200).send({
-        message: `Se subieron ${uploadedFiles.length} archivo(s) correctamente.`,
-        files: uploadedFiles,
-      });
-    } catch (error) {
-      console.error("Error al procesar archivos:", error);
-      res.status(500).send("Error interno al procesar la solicitud.");
-    }
+    busboy.on("error", (error) => {
+      console.error("Error en Busboy:", error);
+      res.status(500).send("Error procesando la solicitud.");
+    });
+
+    busboy.end(req.rawBody);
   });
-
-  // Manejo de errores en Busboy
-  busboy.on("error", (error) => {
-    console.error("Error en Busboy:", error);
-    res.status(500).send("Error procesando la solicitud.");
-  });
-
-  busboy.end(req.rawBody);
 });
 
 module.exports = { uploadBulk };
