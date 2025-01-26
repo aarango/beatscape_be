@@ -1,16 +1,19 @@
-export class Song {
+class Song {
   constructor({
     title,
-    bpm,
     artist,
     genre,
     sampleRate,
     duration,
     bitrate,
-    imageBase64,
+    picture,
     filePath,
     energy = 0,
     hit = 0,
+    bpm = 0,
+    album = "",
+    lossless = false,
+    numberOfSamples = 0,
   }) {
     this.title = title;
     this.bpm = bpm;
@@ -19,9 +22,15 @@ export class Song {
     this.sampleRate = sampleRate;
     this.duration = duration;
     this.bitrate = bitrate;
-    this.imageBase64 = imageBase64;
+    this.picture = picture;
     this.filePath = filePath;
     this.energy = energy;
     this.hit = hit;
+    this.bpm = bpm;
+    this.album = album;
+    this.lossless = lossless;
+    this.numberOfSamples = numberOfSamples;
   }
 }
+
+module.exports = { Song };

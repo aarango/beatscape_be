@@ -1,13 +1,13 @@
 {
     "compilerOptions": {
       "baseUrl": ".", 
-      // "paths": {
-      //   "@entities/*": ["src/domain/entities/*"],
-      //   "@controllers/*": ["src/presentation/controllers/*"],
-      //   "@infrastructure/*": ["src/infrastructure/*"],
-      //   "@useCases/*": ["src/application/useCases/*"],
-      //   "@utils/*": ["src/utils/*"]  
-      // }
+      "paths": {
+        "@entities/*": ["src/domain/entities/*"],
+        "@controllers/*": ["src/presentation/controllers/*"],
+        "@infrastructure/*": ["src/infrastructure/*"],
+        "@useCases/*": ["src/application/useCases/*"],
+        "@utils/*": ["src/utils/*"]  
+      }
     },
     "include": ["src/**/*"], 
     "exclude": ["node_modules"] 

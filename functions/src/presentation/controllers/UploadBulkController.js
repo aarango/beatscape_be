@@ -7,8 +7,12 @@ const cors = require("cors")({ origin: true });
 const {
   initFirebase,
 } = require("@infrastructure/data/firebase/FirebaseConfig");
+const {
+  uploadFile,
+} = require("@infrastructure/adapters/FirebaseStorageAdapter");
+const { UploadSongsUseCase } = require("@useCases/UploadSongsUseCase");
 
-const { storage } = initFirebase();
+const { storage, db } = initFirebase();
 
 const uploadBulk = onRequest(async (req, res) => {
   cors(req, res, async () => {
@@ -36,7 +40,6 @@ const uploadBulk = onRequest(async (req, res) => {
     const uploads = []; // Lista para almacenar promesas de subida
 
     busboy.on("file", (fieldname, file, { filename, mimetype }) => {
-      console.log(`Procesando archivo: ${filename}`);
       const filepath = path.join(tmpdir, filename);
 
       const writeStream = fs.createWriteStream(filepath);
@@ -49,23 +52,27 @@ const uploadBulk = onRequest(async (req, res) => {
 
         writeStream.on("close", async () => {
           try {
-            const bucket = storage.bucket();
             const destinationPath = `songs/${filename}`;
 
-            console.log(`Subiendo archivo a Storage: ${filename}`);
+            const publicUrl = await uploadFile(
+              storage,
+              filepath,
+              destinationPath,
+              mimetype || "audio/mpeg",
+            );
 
-            // Subida del archivo al bucket
-            const [uploadedFile] = await bucket.upload(filepath, {
-              destination: destinationPath,
-              contentType: mimetype || "audio/mpeg",
-              public: true,
+            const uploadedFile = await UploadSongsUseCase({
+              db,
+              song: {
+                title: filename,
+                filePath: publicUrl,
+                mimeType: mimetype,
+                path: filepath,
+              },
             });
 
-            // Hacer público el archivo y obtener la URL
-            await uploadedFile.makePublic();
-            const publicUrl = uploadedFile.publicUrl();
+            console.log(`Archivo uploadedFile : ${uploadedFile}`);
 
-            console.log(`Archivo subido exitosamente: ${filename}`);
             resolve({ filename, url: publicUrl });
           } catch (error) {
             console.error(`Error subiendo archivo ${filename}:`, error);

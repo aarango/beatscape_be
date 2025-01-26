@@ -7,6 +7,11 @@ const { getAuth } = require("firebase-admin/auth");
 const { getFirestore, FieldValue } = require("firebase-admin/firestore");
 const { getStorage } = require("firebase-admin/storage");
 
+let adminApp;
+let db;
+let auth;
+let storage;
+
 function initFirebase() {
   let adminApp;
   try {
@@ -21,8 +26,8 @@ function initFirebase() {
     }
 
     const auth = getAuth(adminApp);
-    const db = getFirestore(adminApp);
-    const storage = getStorage(adminApp);
+    db = getFirestore(adminApp);
+    storage = getStorage(adminApp);
 
     db.settings({
       ignoreUndefinedProperties: true,
@@ -41,4 +46,14 @@ function initFirebase() {
   }
 }
 
-module.exports = { initFirebase };
+function getStorageInstance() {
+  if (!storage) initFirebase();
+  return storage;
+}
+
+function getFirestoreInstance() {
+  if (!db) initFirebase();
+  return db;
+}
+
+module.exports = { initFirebase, getStorageInstance, getFirestoreInstance };
