@@ -7,7 +7,7 @@ class Song {
     duration,
     bitrate,
     picture,
-    filePath,
+    url,
     energy = 0,
     hit = 0,
     bpm = 0,
@@ -23,7 +23,7 @@ class Song {
     this.duration = duration;
     this.bitrate = bitrate;
     this.picture = picture;
-    this.filePath = filePath;
+    this.url = url;
     this.energy = energy;
     this.hit = hit;
     this.bpm = bpm;

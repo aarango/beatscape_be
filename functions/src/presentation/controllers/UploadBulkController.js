@@ -37,9 +37,9 @@ const uploadBulk = onRequest(async (req, res) => {
     const tmpdir = os.tmpdir();
     const busboy = Busboy({ headers: req.headers });
 
-    const uploads = []; // Lista para almacenar promesas de subida
+    const uploads = [];
 
-    busboy.on("file", (fieldname, file, { filename, mimetype }) => {
+    busboy.on("file", (fieldname, file, { filename }) => {
       const filepath = path.join(tmpdir, filename);
 
       const writeStream = fs.createWriteStream(filepath);
@@ -52,28 +52,18 @@ const uploadBulk = onRequest(async (req, res) => {
 
         writeStream.on("close", async () => {
           try {
-            const destinationPath = `songs/${filename}`;
-
-            const publicUrl = await uploadFile(
-              storage,
-              filepath,
-              destinationPath,
-              mimetype || "audio/mpeg",
-            );
-
             const uploadedFile = await UploadSongsUseCase({
               db,
+              storage,
               song: {
                 title: filename,
-                filePath: publicUrl,
-                mimeType: mimetype,
                 path: filepath,
               },
             });
 
             console.log(`Archivo uploadedFile : ${uploadedFile}`);
 
-            resolve({ filename, url: publicUrl });
+            resolve({ filename, uploadedFile });
           } catch (error) {
             console.error(`Error subiendo archivo ${filename}:`, error);
             reject(error);

@@ -1,5 +1,9 @@
 const { Song } = require("@entities/Songs");
+const {
+  uploadFile,
+} = require("@infrastructure/adapters/FirebaseStorageAdapter");
 const { loadMusicMetadata } = require("music-metadata");
+
 /**
  * Sube una canción al Storage, extrae metadata y la guarda en Firestore.
  *
@@ -8,9 +12,10 @@ const { loadMusicMetadata } = require("music-metadata");
  * @param {Object} params.song - Entidad Song con título, filePath, etc.
  * @returns {Promise<Object>} - La entidad Song actualizada con metadata.
  */
-async function UploadSongsUseCase({ song, db }) {
-  console.log("🚀 ~ UploadSongsUseCase ~ song:", song);
+async function UploadSongsUseCase({ song, db, storage }) {
   try {
+    const destinationPath = `songs/${song.filename}`;
+
     const mm = await loadMusicMetadata();
     const metadata = await mm.parseFile(song.path);
 
@@ -20,6 +25,13 @@ async function UploadSongsUseCase({ song, db }) {
     };
 
     const picture = meta.common.picture?.at(0);
+
+    const publicUrl = await uploadFile(
+      storage,
+      song.path,
+      destinationPath,
+      meta.format.container || "audio/mpeg",
+    );
 
     const modelSong = new Song({
       title: metadata.common.title || "",
@@ -32,19 +44,24 @@ async function UploadSongsUseCase({ song, db }) {
       bitrate: metadata.format.bitrate || 0,
       sampleRate: metadata.format.sampleRate || 0,
       picture: { image: picture?.data.toString("base64") ?? "", ...picture },
-      filePath: song.filePath,
+      url: publicUrl,
       lossless: metadata.format.lossless || false,
       numberOfSamples: metadata.format.numberOfSamples || 0,
-      bpm: metadata.common.bpm || 0,
     });
 
     const docRef = db.collection("songs").doc();
-    const response = await docRef.set({
+    const documentId = docRef.id;
+
+    modelSong.id = documentId;
+
+    await docRef.set({
       ...modelSong,
+      id: documentId, 
       createdAt: new Date(),
     });
 
-    return response;
+    console.log(`Canción guardada con ID: ${documentId}`);
+    return { ...modelSong, id: documentId };
   } catch (error) {
     console.error("Error en UploadSongsUseCase:", error);
     throw error;
