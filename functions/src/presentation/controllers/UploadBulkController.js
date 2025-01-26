@@ -7,9 +7,7 @@ const cors = require("cors")({ origin: true });
 const {
   initFirebase,
 } = require("@infrastructure/data/firebase/FirebaseConfig");
-const {
-  uploadFile,
-} = require("@infrastructure/adapters/FirebaseStorageAdapter");
+
 const { UploadSongsUseCase } = require("@useCases/UploadSongsUseCase");
 
 const { storage, db } = initFirebase();
@@ -84,6 +82,7 @@ const uploadBulk = onRequest(async (req, res) => {
     busboy.on("finish", async () => {
       try {
         const uploadedFiles = await Promise.all(uploads);
+        console.log("🚀 ~ busboy.on ~ uploadedFiles:", uploadedFiles);
 
         res.status(200).send({
           message: `Se subieron ${uploadedFiles.length} archivo(s) correctamente.`,

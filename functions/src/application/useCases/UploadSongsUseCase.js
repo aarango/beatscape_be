@@ -2,6 +2,7 @@ const { Song } = require("@entities/Songs");
 const {
   uploadFile,
 } = require("@infrastructure/adapters/FirebaseStorageAdapter");
+const { normalizeString } = require("@utils/normaliceString");
 const { loadMusicMetadata } = require("music-metadata");
 
 /**
@@ -10,12 +11,16 @@ const { loadMusicMetadata } = require("music-metadata");
  * @param {Object} params
  * @param {Object} params.storage - Instancia de Firebase Storage.
  * @param {Object} params.song - Entidad Song con título, filePath, etc.
- * @returns {Promise<Object>} - La entidad Song actualizada con metadata.
+ * @param {Object} params.db - Instancia de Firestore.
+ * @returns {Promise<Object>} - Resultado con canciones procesadas y repeticiones.
  */
 async function UploadSongsUseCase({ song, db, storage }) {
+  const repeats = []; // Lista para canciones repetidas
+
   try {
     const destinationPath = `songs/${song.filename}`;
 
+    // Cargar metadata del archivo
     const mm = await loadMusicMetadata();
     const metadata = await mm.parseFile(song.path);
 
@@ -26,6 +31,40 @@ async function UploadSongsUseCase({ song, db, storage }) {
 
     const picture = meta.common.picture?.at(0);
 
+    const modelSong = new Song({
+      title: normalizeString(metadata.common.title || ""),
+      artist: normalizeString(metadata.common.artist || ""),
+      genre: normalizeString(metadata.common.genre?.[0] || ""),
+      year: metadata.common.year || 0,
+      bpm: metadata.common.bpm || 0,
+      album: normalizeString(metadata.common.album || ""),
+      duration: metadata.format.duration || 0,
+      bitrate: metadata.format.bitrate || 0,
+      sampleRate: metadata.format.sampleRate || 0,
+      picture: { image: picture?.data.toString("base64") ?? "", ...picture },
+      filePath: song.filePath,
+      lossless: metadata.format.lossless || false,
+      numberOfSamples: metadata.format.numberOfSamples || 0,
+    });
+
+    const existingSongsSnapshot = await db
+      .collection("songs")
+      .where("title", "==", modelSong.title)
+      .where("artist", "==", modelSong.artist)
+      .get();
+
+    if (!existingSongsSnapshot.empty) {
+      console.warn(
+        `Canción duplicada detectada: ${modelSong.title} por ${modelSong.artist}`,
+      );
+      repeats.push({
+        title: modelSong.title,
+        artist: modelSong.artist,
+        reason: "Duplicate song detected.",
+      });
+      return { repeats };
+    }
+
     const publicUrl = await uploadFile(
       storage,
       song.path,
@@ -33,21 +72,7 @@ async function UploadSongsUseCase({ song, db, storage }) {
       meta.format.container || "audio/mpeg",
     );
 
-    const modelSong = new Song({
-      title: metadata.common.title || "",
-      artist: metadata.common.artist || "",
-      genre: metadata.common.genre?.[0] || "",
-      year: metadata.common.year || 0,
-      bpm: metadata.common.bpm || 0,
-      album: metadata.common.album || "",
-      duration: metadata.format.duration || 0,
-      bitrate: metadata.format.bitrate || 0,
-      sampleRate: metadata.format.sampleRate || 0,
-      picture: { image: picture?.data.toString("base64") ?? "", ...picture },
-      url: publicUrl,
-      lossless: metadata.format.lossless || false,
-      numberOfSamples: metadata.format.numberOfSamples || 0,
-    });
+    modelSong.url = publicUrl;
 
     const docRef = db.collection("songs").doc();
     const documentId = docRef.id;
@@ -56,12 +81,13 @@ async function UploadSongsUseCase({ song, db, storage }) {
 
     await docRef.set({
       ...modelSong,
-      id: documentId, 
+      id: documentId,
       createdAt: new Date(),
     });
 
     console.log(`Canción guardada con ID: ${documentId}`);
-    return { ...modelSong, id: documentId };
+
+    return { processed: [modelSong], repeats };
   } catch (error) {
     console.error("Error en UploadSongsUseCase:", error);
     throw error;

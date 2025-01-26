@@ -1,5 +1,3 @@
-const fs = require("fs");
-
 /**
  * Sube un archivo al bucket y lo hace público.
  *

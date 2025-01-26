@@ -7,9 +7,7 @@ const { getAuth } = require("firebase-admin/auth");
 const { getFirestore, FieldValue } = require("firebase-admin/firestore");
 const { getStorage } = require("firebase-admin/storage");
 
-let adminApp;
 let db;
-let auth;
 let storage;
 
 function initFirebase() {

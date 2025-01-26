@@ -32,7 +32,8 @@
     "@controllers": "src/presentation/controllers",
     "@infrastructure": "src/infrastructure",
     "@useCases": "src/application/useCases",
-    "@entities": "src/domain/entities"
+    "@entities": "src/domain/entities",
+    "@utils": "src/utils"
   },
   "private": true
 }
