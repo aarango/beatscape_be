@@ -78,19 +78,44 @@ const uploadBulk = onRequest(async (req, res) => {
 
       uploads.push(uploadPromise);
     });
-
     busboy.on("finish", async () => {
       try {
         const uploadedFiles = await Promise.all(uploads);
-        console.log("🚀 ~ busboy.on ~ uploadedFiles:", uploadedFiles);
+
+        const processedSongs = [];
+        const rejectedSongs = [];
+
+        uploadedFiles.forEach((file) => {
+          const { uploadedFile } = file;
+
+          if (uploadedFile.processed && Array.isArray(uploadedFile.processed)) {
+            uploadedFile.processed.forEach((song) => {
+              processedSongs.push({
+                ...song,
+              });
+            });
+          }
+
+          if (uploadedFile.repeats && Array.isArray(uploadedFile.repeats)) {
+            uploadedFile.repeats.forEach((song) => {
+              rejectedSongs.push({
+                ...song,
+              });
+            });
+          }
+        });
 
         res.status(200).send({
-          message: `Se subieron ${uploadedFiles.length} archivo(s) correctamente.`,
-          files: uploadedFiles,
+          message: `Se procesaron ${uploadedFiles.length} archivo(s) correctamente.`,
+          processed: processedSongs,
+          rejected: rejectedSongs,
         });
       } catch (error) {
         console.error("Error al procesar archivos:", error);
-        res.status(500).send("Error interno al procesar la solicitud.");
+        res.status(500).send({
+          message: "Error interno al procesar la solicitud.",
+          error: error.message,
+        });
       }
     });
 

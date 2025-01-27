@@ -1,4 +1,5 @@
 const { Song } = require("@entities/Songs");
+const crypto = require("crypto");
 const {
   uploadFile,
 } = require("@infrastructure/adapters/FirebaseStorageAdapter");
@@ -18,7 +19,7 @@ async function UploadSongsUseCase({ song, db, storage }) {
   const repeats = []; // Lista para canciones repetidas
 
   try {
-    const destinationPath = `songs/${song.filename}`;
+    const destinationPath = `songs/${song.title}`;
 
     // Cargar metadata del archivo
     const mm = await loadMusicMetadata();
@@ -30,6 +31,20 @@ async function UploadSongsUseCase({ song, db, storage }) {
     };
 
     const picture = meta.common.picture?.at(0);
+    const pictureData = picture ? picture.data.toString("base64") : "";
+
+    const generateSongHash = (title, artist, year) => {
+      return crypto
+        .createHash("sha256")
+        .update(`${title}-${artist}-${year}`)
+        .digest("hex");
+    };
+
+    const title = normalizeString(metadata.common.title || "");
+    const artist = normalizeString(metadata.common.artist || "");
+    const year = metadata.common.year || 0;
+
+    const songHash = generateSongHash(title, artist, year);
 
     const modelSong = new Song({
       title: normalizeString(metadata.common.title || ""),
@@ -41,16 +56,17 @@ async function UploadSongsUseCase({ song, db, storage }) {
       duration: metadata.format.duration || 0,
       bitrate: metadata.format.bitrate || 0,
       sampleRate: metadata.format.sampleRate || 0,
-      picture: { image: picture?.data.toString("base64") ?? "", ...picture },
+      picture: picture ? { image: pictureData, ...picture } : { image: "" },
       filePath: song.filePath,
       lossless: metadata.format.lossless || false,
       numberOfSamples: metadata.format.numberOfSamples || 0,
+      songHash: songHash,
     });
 
     const existingSongsSnapshot = await db
       .collection("songs")
-      .where("title", "==", modelSong.title)
-      .where("artist", "==", modelSong.artist)
+      .where("songHash", "==", songHash)
+      .limit(1)
       .get();
 
     if (!existingSongsSnapshot.empty) {
@@ -58,8 +74,7 @@ async function UploadSongsUseCase({ song, db, storage }) {
         `Canción duplicada detectada: ${modelSong.title} por ${modelSong.artist}`,
       );
       repeats.push({
-        title: modelSong.title,
-        artist: modelSong.artist,
+        ...modelSong,
         reason: "Duplicate song detected.",
       });
       return { repeats };

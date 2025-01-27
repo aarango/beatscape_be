@@ -14,6 +14,7 @@ class Song {
     album = "",
     lossless = false,
     numberOfSamples = 0,
+    songHash = "",
   }) {
     this.title = title;
     this.bpm = bpm;
@@ -30,6 +31,7 @@ class Song {
     this.album = album;
     this.lossless = lossless;
     this.numberOfSamples = numberOfSamples;
+    this.songHash = songHash;
   }
 }
 
