@@ -5,7 +5,7 @@ const {
 } = require("@infrastructure/adapters/FirebaseStorageAdapter");
 const { normalizeString } = require("@utils/normaliceString");
 const { loadMusicMetadata } = require("music-metadata");
-
+// const { FieldValue } = require("@infrastructure/data/firebase/FirebaseConfig");
 /**
  * Sube una canción al Storage, extrae metadata y la guarda en Firestore.
  *
@@ -30,8 +30,10 @@ async function UploadSongsUseCase({ song, db, storage }) {
       format: { ...metadata.format },
     };
 
-    const picture = meta.common.picture?.at(0);
-    const pictureData = picture ? picture.data.toString("base64") : "";
+    const picture = meta.common.picture?.[0];
+    const pictureData = picture
+      ? Buffer.from(picture.data).toString("base64")
+      : "";
 
     const generateSongHash = (title, artist, year) => {
       return crypto
@@ -47,16 +49,21 @@ async function UploadSongsUseCase({ song, db, storage }) {
     const songHash = generateSongHash(title, artist, year);
 
     const modelSong = new Song({
-      title: normalizeString(metadata.common.title || ""),
-      artist: normalizeString(metadata.common.artist || ""),
+      title: title,
+      artist: artist,
       genre: normalizeString(metadata.common.genre?.[0] || ""),
-      year: metadata.common.year || 0,
+      year: year,
       bpm: metadata.common.bpm || 0,
       album: normalizeString(metadata.common.album || ""),
       duration: metadata.format.duration || 0,
       bitrate: metadata.format.bitrate || 0,
       sampleRate: metadata.format.sampleRate || 0,
-      picture: picture ? { image: pictureData, ...picture } : { image: "" },
+      picture: picture
+        ? {
+            image: pictureData, // Base64 string
+            format: picture.format || "",
+          }
+        : { image: "" },
       filePath: song.filePath,
       lossless: metadata.format.lossless || false,
       numberOfSamples: metadata.format.numberOfSamples || 0,

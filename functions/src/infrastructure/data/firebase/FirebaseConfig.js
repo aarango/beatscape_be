@@ -1,3 +1,5 @@
+// functions/src/infrastructure/data/firebase/FirebaseConfig.js
+
 const {
   initializeApp,
   applicationDefault,
@@ -9,49 +11,45 @@ const { getStorage } = require("firebase-admin/storage");
 
 let db;
 let storage;
+let auth;
 
+/**
+ * Inicializa Firebase Admin SDK solo una vez y exporta las instancias.
+ */
 function initFirebase() {
-  let adminApp;
-  try {
-    if (!getApps().length) {
-      adminApp = initializeApp({
+  if (!getApps().length) {
+    try {
+      initializeApp({
         credential: applicationDefault(),
-        storageBucket: "beatscape-ae003.firebasestorage.app",
+        storageBucket: "beatscape-ae003.firebasestorage.app", // Reemplaza con tu bucket de Storage
       });
       console.log("Firebase Admin SDK initialized successfully.");
-    } else {
-      adminApp = getApps()[0];
+    } catch (error) {
+      console.error("Error initializing Firebase Admin SDK:", error);
+      throw new Error("Failed to initialize Firebase Admin SDK.");
     }
-
-    const auth = getAuth(adminApp);
-    db = getFirestore(adminApp);
-    storage = getStorage(adminApp);
-
-    db.settings({
-      ignoreUndefinedProperties: true,
-    });
-
-    if (process.env.NODE_ENV === "development") {
-      db.useEmulator("localhost", 8080);
-      auth.useEmulator("http://localhost:9099");
-      storage.useEmulator("localhost", 9199);
-    }
-
-    return { db, auth, FieldValue, storage };
-  } catch (error) {
-    console.error("Error initializing Firebase Admin SDK:", error);
-    throw new Error("Failed to initialize Firebase Admin SDK.");
+  } else {
+    console.log("Firebase Admin SDK already initialized.");
   }
+
+  auth = getAuth();
+  db = getFirestore();
+  storage = getStorage();
+
+  db.settings({
+    ignoreUndefinedProperties: true,
+  });
+
+  if (process.env.NODE_ENV === "development") {
+    db.useEmulator("localhost", 8080);
+    auth.useEmulator("http://localhost:9099");
+    storage.useEmulator("localhost", 9199);
+    console.log("Firebase emulators are active.");
+  }
+
+  return { db, auth, FieldValue, storage };
 }
 
-function getStorageInstance() {
-  if (!storage) initFirebase();
-  return storage;
-}
+initFirebase();
 
-function getFirestoreInstance() {
-  if (!db) initFirebase();
-  return db;
-}
-
-module.exports = { initFirebase, getStorageInstance, getFirestoreInstance };
+module.exports = { db, auth, FieldValue, storage };
