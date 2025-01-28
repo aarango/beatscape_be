@@ -1,3 +1,5 @@
+// functions/src/presentation/controllers/uploadBulk.js
+
 const { onRequest } = require("firebase-functions/v2/https");
 const path = require("path");
 const os = require("os");
@@ -6,13 +8,17 @@ const Busboy = require("busboy");
 const cors = require("cors")({ origin: true });
 
 const { UploadSongsUseCase } = require("@useCases/UploadSongsUseCase");
-
 const { storage, db } = require("@infrastructure/data/firebase/FirebaseConfig");
 
+/**
+ * Función Cloud Function para subir múltiples canciones en bloque.
+ * Endpoint: https://<REGION>-<PROJECT_ID>.cloudfunctions.net/uploadBulk
+ */
 const uploadBulk = onRequest(
   {
     memory: "1GiB",
     timeoutSeconds: 300,
+    maxBytes: 900 * 1024 * 1024, // 100MB
   },
   async (req, res) => {
     cors(req, res, async () => {
@@ -32,6 +38,12 @@ const uploadBulk = onRequest(
         return res
           .status(400)
           .send("El encabezado 'Content-Type' debe ser 'multipart/form-data'.");
+      }
+
+      const authHeader = req.headers.authorization;
+
+      if (!authHeader || !authHeader.startsWith("Bearer ")) {
+        return res.status(401).json({ error: "Autenticación requerida." });
       }
 
       const tmpdir = os.tmpdir();
@@ -61,7 +73,7 @@ const uploadBulk = onRequest(
                 },
               });
 
-              console.log(`Archivo uploadedFile : ${uploadedFile}`);
+              console.log(`Archivo subido: ${uploadedFile}`);
 
               resolve({ filename, uploadedFile });
             } catch (error) {

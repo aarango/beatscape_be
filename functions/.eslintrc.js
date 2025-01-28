@@ -59,5 +59,6 @@ module.exports = {
     "prefer-const": "off",
     "quote-props": "off",
     "import/no-unresolved": "off",
+    "no-prototype-builtins": "off",
   },
 };

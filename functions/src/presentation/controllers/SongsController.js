@@ -4,9 +4,8 @@ const { Song } = require("@entities/Songs");
 const { db } = require("@infrastructure/data/firebase/FirebaseConfig");
 const { onRequest } = require("firebase-functions/v2/https");
 
-const Joi = require("joi"); 
-const cors = require("cors")({ origin: true }); 
-
+const Joi = require("joi");
+const cors = require("cors")({ origin: true });
 
 /**
  * Función Cloud Function para obtener canciones paginadas desde Firestore.
@@ -15,16 +14,6 @@ const cors = require("cors")({ origin: true });
 const getSongs = onRequest(async (req, res) => {
   cors(req, res, async () => {
     try {
-      // Manejar solicitudes OPTIONS para CORS preflight
-      if (req.method === "OPTIONS") {
-        res.set("Access-Control-Allow-Origin", "*");
-        res.set("Access-Control-Allow-Methods", "GET");
-        res.set("Access-Control-Allow-Headers", "Authorization, Content-Type");
-        res.status(204).send("");
-        return;
-      }
-
-      // Permitir solo solicitudes GET
       if (req.method !== "GET") {
         return res.status(405).json({ error: "Método no permitido. Usa GET." });
       }
@@ -35,9 +24,7 @@ const getSongs = onRequest(async (req, res) => {
         return res.status(401).json({ error: "Autenticación requerida." });
       }
 
- 
-
-      // Validar y sanitizar los parámetros de consulta usando Joi
+      // Validación de datos
       const schema = Joi.object({
         page: Joi.number().integer().min(1).default(1),
         pageSize: Joi.number().integer().min(1).max(100).default(15),
@@ -58,47 +45,59 @@ const getSongs = onRequest(async (req, res) => {
       let orderDirection = "desc";
 
       if (search) {
-        const [field, ...valueParts] = search.split(":"); 
+        const [field, ...valueParts] = search.split(":");
         const searchValueRaw = valueParts.join(":").trim();
 
         const allowedFields = Song.allowedSearchFields;
 
         if (!allowedFields.hasOwnProperty(field)) {
-          return res.status(400).json({ error: `Campo de búsqueda inválido: ${field}` });
+          return res
+            .status(400)
+            .json({ error: `Campo de búsqueda inválido: ${field}` });
         }
 
         if (!searchValueRaw) {
-          return res.status(400).json({ error: "Formato de búsqueda inválido. Esperado: 'campo:valor'" });
+          console.log("Formato de búsqueda inválido. Esperado: 'campo:valor'");
+          return res.status(400).json({
+            error: "Formato de búsqueda inválido. Esperado: 'campo:valor'",
+          });
         }
 
         const fieldType = allowedFields[field];
         let searchValue;
 
         switch (fieldType) {
-          case 'number':
+          case "number":
             searchValue = Number(searchValueRaw);
             if (isNaN(searchValue)) {
-              return res.status(400).json({ error: `El valor para el campo ${field} debe ser un número.` });
+              return res.status(400).json({
+                error: `El valor para el campo ${field} debe ser un número.`,
+              });
             }
             break;
-          case 'boolean':
-            if (searchValueRaw.toLowerCase() === 'true') {
+          case "boolean":
+            if (searchValueRaw.toLowerCase() === "true") {
               searchValue = true;
-            } else if (searchValueRaw.toLowerCase() === 'false') {
+            } else if (searchValueRaw.toLowerCase() === "false") {
               searchValue = false;
             } else {
-              return res.status(400).json({ error: `El valor para el campo ${field} debe ser 'true' o 'false'.` });
+              return res.status(400).json({
+                error: `El valor para el campo ${field} debe ser 'true' o 'false'.`,
+              });
             }
             break;
-          case 'string':
+          case "string":
             searchValue = searchValueRaw;
             break;
           default:
-            return res.status(400).json({ error: `Tipo de campo no soportado: ${fieldType}` });
+            console.log(`Tipo de campo no soportado: ${fieldType}`);
+            return res
+              .status(400)
+              .json({ error: `Tipo de campo no soportado: ${fieldType}` });
         }
 
         // Aplicar filtros de búsqueda según el tipo de campo
-        if (fieldType === 'string') {
+        if (fieldType === "string") {
           ref = ref
             .where(field, ">=", searchValue)
             .where(field, "<=", searchValue + "\uf8ff");
@@ -112,7 +111,6 @@ const getSongs = onRequest(async (req, res) => {
 
       // Aplicar ordenamiento
       ref = ref.orderBy(orderByField, orderDirection);
-
       if (search) {
         if (orderByField !== "createdAt") {
           ref = ref.orderBy("createdAt", "desc");
@@ -138,7 +136,8 @@ const getSongs = onRequest(async (req, res) => {
         const cursorSnapshot = await ref.limit(previousLimit).get();
 
         if (!cursorSnapshot.empty) {
-          const lastVisible = cursorSnapshot.docs[cursorSnapshot.docs.length - 1];
+          const lastVisible =
+            cursorSnapshot.docs[cursorSnapshot.docs.length - 1];
           songsQuery = ref.startAfter(lastVisible).limit(pageSize);
         }
       }
