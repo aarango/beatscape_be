@@ -1,3 +1,5 @@
+// models/Song.js
+
 class Song {
   constructor({
     title,
@@ -32,6 +34,29 @@ class Song {
     this.lossless = lossless;
     this.numberOfSamples = numberOfSamples;
     this.songHash = songHash;
+  }
+
+  /**
+   * Retorna los campos permitidos para búsqueda junto con sus tipos.
+   * Excluye el campo 'picture'.
+   */
+  static get allowedSearchFields() {
+    return {
+      title: "string",
+      artist: "string",
+      genre: "string",
+      sampleRate: "number",
+      duration: "number",
+      bitrate: "number",
+      url: "string",
+      energy: "number",
+      hit: "number",
+      bpm: "number",
+      album: "string",
+      lossless: "boolean",
+      numberOfSamples: "number",
+      songHash: "string",
+    };
   }
 }
 

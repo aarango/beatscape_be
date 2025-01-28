@@ -1,10 +1,12 @@
 // functions/src/presentation/controllers/getSong.js
 
+const { Song } = require("@entities/Songs");
 const { db } = require("@infrastructure/data/firebase/FirebaseConfig");
 const { onRequest } = require("firebase-functions/v2/https");
 
-const Joi = require("joi"); // Para validación de parámetros
-const cors = require("cors")({ origin: true }); // Para manejar CORS
+const Joi = require("joi"); 
+const cors = require("cors")({ origin: true }); 
+
 
 /**
  * Función Cloud Function para obtener canciones paginadas desde Firestore.
@@ -27,12 +29,13 @@ const getSongs = onRequest(async (req, res) => {
         return res.status(405).json({ error: "Método no permitido. Usa GET." });
       }
 
-      // Extraer el encabezado de autorización
       const authHeader = req.headers.authorization;
 
       if (!authHeader || !authHeader.startsWith("Bearer ")) {
         return res.status(401).json({ error: "Autenticación requerida." });
       }
+
+ 
 
       // Validar y sanitizar los parámetros de consulta usando Joi
       const schema = Joi.object({
@@ -55,31 +58,67 @@ const getSongs = onRequest(async (req, res) => {
       let orderDirection = "desc";
 
       if (search) {
-        const [field, ...valueParts] = search.split(":");
-        const searchValue = valueParts.join(":").trim();
+        const [field, ...valueParts] = search.split(":"); 
+        const searchValueRaw = valueParts.join(":").trim();
 
-        if (!searchValue) {
-          return res.status(400).json({
-            error: "Formato de búsqueda inválido. Esperado: 'campo:valor'",
-          });
+        const allowedFields = Song.allowedSearchFields;
+
+        if (!allowedFields.hasOwnProperty(field)) {
+          return res.status(400).json({ error: `Campo de búsqueda inválido: ${field}` });
         }
 
-        // Aplicar filtros de búsqueda
-        ref = ref
-          .where(field, ">=", searchValue)
-          .where(field, "<=", searchValue + "\uf8ff");
+        if (!searchValueRaw) {
+          return res.status(400).json({ error: "Formato de búsqueda inválido. Esperado: 'campo:valor'" });
+        }
 
-        orderByField = field;
+        const fieldType = allowedFields[field];
+        let searchValue;
+
+        switch (fieldType) {
+          case 'number':
+            searchValue = Number(searchValueRaw);
+            if (isNaN(searchValue)) {
+              return res.status(400).json({ error: `El valor para el campo ${field} debe ser un número.` });
+            }
+            break;
+          case 'boolean':
+            if (searchValueRaw.toLowerCase() === 'true') {
+              searchValue = true;
+            } else if (searchValueRaw.toLowerCase() === 'false') {
+              searchValue = false;
+            } else {
+              return res.status(400).json({ error: `El valor para el campo ${field} debe ser 'true' o 'false'.` });
+            }
+            break;
+          case 'string':
+            searchValue = searchValueRaw;
+            break;
+          default:
+            return res.status(400).json({ error: `Tipo de campo no soportado: ${fieldType}` });
+        }
+
+        // Aplicar filtros de búsqueda según el tipo de campo
+        if (fieldType === 'string') {
+          ref = ref
+            .where(field, ">=", searchValue)
+            .where(field, "<=", searchValue + "\uf8ff");
+          orderByField = field;
+        } else {
+          // Para campos numéricos o booleanos, usar igualdad
+          ref = ref.where(field, "==", searchValue);
+          orderByField = field;
+        }
       }
 
       // Aplicar ordenamiento
       ref = ref.orderBy(orderByField, orderDirection);
 
       if (search) {
-        ref = ref.orderBy("createdAt", "desc");
+        if (orderByField !== "createdAt") {
+          ref = ref.orderBy("createdAt", "desc");
+        }
       }
 
-      // Contar el total de elementos filtrados
       const countSnapshot = await ref.count().get();
       const totalItems = countSnapshot.data().count;
       const totalPages = Math.ceil(totalItems / pageSize);
@@ -93,15 +132,13 @@ const getSongs = onRequest(async (req, res) => {
       let songsQuery = ref.limit(pageSize);
 
       if (page > 1) {
-        // Calcular el punto de inicio usando startAfter
         const previousPages = page - 1;
         const previousLimit = previousPages * pageSize;
 
         const cursorSnapshot = await ref.limit(previousLimit).get();
 
         if (!cursorSnapshot.empty) {
-          const lastVisible =
-            cursorSnapshot.docs[cursorSnapshot.docs.length - 1];
+          const lastVisible = cursorSnapshot.docs[cursorSnapshot.docs.length - 1];
           songsQuery = ref.startAfter(lastVisible).limit(pageSize);
         }
       }
