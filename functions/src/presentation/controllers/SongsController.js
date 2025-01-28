@@ -34,31 +34,11 @@ const getSongs = onRequest(async (req, res) => {
         return res.status(401).json({ error: "Autenticación requerida." });
       }
 
-      //   const idToken = authHeader.split("Bearer ")[1];
-
-      // Verificar el token con Firebase Auth
-      //   let decodedToken;
-      //   try {
-      //     decodedToken = await auth.verifyIdToken(idToken);
-      //   } catch (error) {
-      //     console.error("Error verificando el token de autenticación:", error);
-      //     return res
-      //       .status(401)
-      //       .json({ error: "Token de autenticación inválido." });
-      //   }
-
-      //   const uid = decodedToken.uid;
-
-      // Opcional: Verificar permisos específicos del usuario
-      // const userRecord = await admin.auth().getUser(uid);
-      // if (!userRecord.customClaims || !userRecord.customClaims.admin) {
-      //   return res.status(403).json({ error: "Acceso denegado." });
-      // }
-
       // Validar y sanitizar los parámetros de consulta usando Joi
       const schema = Joi.object({
         page: Joi.number().integer().min(1).default(1),
         pageSize: Joi.number().integer().min(1).max(100).default(15),
+        search: Joi.string().optional(),
       });
 
       const { error, value } = schema.validate(req.query);
@@ -67,46 +47,62 @@ const getSongs = onRequest(async (req, res) => {
         return res.status(400).json({ error: error.details[0].message });
       }
 
-      const { page, pageSize } = value;
+      const { page, pageSize, search } = value;
 
-      // Consulta para obtener el total de canciones usando la agregación count
-      const countSnapshot = await db.collection("songs").count().get();
+      let ref = db.collection("songs");
+
+      let orderByField = "createdAt";
+      let orderDirection = "desc";
+
+      if (search) {
+        const [field, ...valueParts] = search.split(":");
+        const searchValue = valueParts.join(":").trim();
+
+        if (!searchValue) {
+          return res.status(400).json({
+            error: "Formato de búsqueda inválido. Esperado: 'campo:valor'",
+          });
+        }
+
+        // Aplicar filtros de búsqueda
+        ref = ref
+          .where(field, ">=", searchValue)
+          .where(field, "<=", searchValue + "\uf8ff");
+
+        orderByField = field;
+      }
+
+      // Aplicar ordenamiento
+      ref = ref.orderBy(orderByField, orderDirection);
+
+      if (search) {
+        ref = ref.orderBy("createdAt", "desc");
+      }
+
+      // Contar el total de elementos filtrados
+      const countSnapshot = await ref.count().get();
       const totalItems = countSnapshot.data().count;
       const totalPages = Math.ceil(totalItems / pageSize);
 
-      // Validar que la página solicitada no exceda el total de páginas
       if (page > totalPages && totalPages !== 0) {
         return res.status(400).json({
           error: "El número de página excede el total de páginas disponibles.",
         });
       }
 
-      // Definir la consulta para obtener las canciones de la página actual
-      let songsQuery = db
-        .collection("songs")
-        .orderBy("createdAt", "desc") // Asegúrate de que cada documento tenga el campo 'createdAt'
-        .limit(pageSize);
+      let songsQuery = ref.limit(pageSize);
 
       if (page > 1) {
         // Calcular el punto de inicio usando startAfter
-        // Para ello, necesitamos obtener el último documento de la página anterior
         const previousPages = page - 1;
         const previousLimit = previousPages * pageSize;
 
-        const cursorSnapshot = await db
-          .collection("songs")
-          .orderBy("createdAt", "desc")
-          .limit(previousLimit)
-          .get();
+        const cursorSnapshot = await ref.limit(previousLimit).get();
 
         if (!cursorSnapshot.empty) {
           const lastVisible =
             cursorSnapshot.docs[cursorSnapshot.docs.length - 1];
-          songsQuery = db
-            .collection("songs")
-            .orderBy("createdAt", "desc")
-            .startAfter(lastVisible)
-            .limit(pageSize);
+          songsQuery = ref.startAfter(lastVisible).limit(pageSize);
         }
       }
 
