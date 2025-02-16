@@ -99,8 +99,6 @@ async function UploadSongsUseCase({ song, db, storage }) {
     const docRef = db.collection("songs").doc();
     const documentId = docRef.id;
 
-    modelSong.id = documentId;
-
     await docRef.set({
       ...modelSong,
       id: documentId,

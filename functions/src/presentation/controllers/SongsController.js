@@ -146,7 +146,7 @@ const getSongs = onRequest(async (req, res) => {
 
       const songs = [];
       songsSnapshot.forEach((doc) => {
-        songs.push({ id: doc.id, ...doc.data() });
+        songs.push({ ...doc.data(), id: doc.id });
       });
 
       // Construir la respuesta
