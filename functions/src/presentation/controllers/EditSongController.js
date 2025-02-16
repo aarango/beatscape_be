@@ -1,11 +1,11 @@
 // functions/index.js
 
-const functions = require("firebase-functions");
+const { onRequest } = require("firebase-functions/v2/https");
 const { normalizeString } = require("@utils/normaliceString");
 const { db } = require("@infrastructure/data/firebase/FirebaseConfig");
 const cors = require("cors")({ origin: true });
 
-exports.editsongs = functions.https.onRequest((req, res) => {
+exports.editsongs = onRequest((req, res) => {
   cors(req, res, async () => {
     if (req.method !== "PUT") {
       return res.status(405).json({ error: "Método no permitido. Usa PUT." });

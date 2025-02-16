@@ -1,11 +1,11 @@
 // functions/index.js
 
-const functions = require("firebase-functions");
+const { onRequest } = require("firebase-functions/v2/https");
 const { normalizeString } = require("@utils/normaliceString");
 const { db } = require("@infrastructure/data/firebase/FirebaseConfig");
 const cors = require("cors")({ origin: true });
 
-exports.editsongs = functions.https.onRequest((req, res) => {
+exports.createUser = onRequest((req, res) => {
   cors(req, res, async () => {
     if (req.method !== "PUT") {
       return res.status(405).json({ error: "Método no permitido. Usa PUT." });
@@ -18,72 +18,76 @@ exports.editsongs = functions.https.onRequest((req, res) => {
     }
 
     try {
-      const { id, genre, hit, energy } = req.body;
+      const {
+        email,
+        password,
+        displayName,
+        canUseMultimedia,
+        cliendId,
+        cliendInfo,
+        username,
+      } = req.body;
       if (!id) {
         return res.status(400).json({ error: "El campo 'id' es obligatorio." });
       }
 
-      if (genre === undefined && hit === undefined && energy === undefined) {
-        return res.status(400).json({
-          error:
-            "Debes proporcionar al menos uno de los campos: 'genre', 'hit', 'energy' para actualizar.",
+      if (
+        !email ||
+        !password ||
+        !displayName ||
+        !canUseMultimedia ||
+        !cliendId ||
+        !cliendInfo
+      ) {
+        return res.status(400).send({
+          error: "invalid-argument",
+          message: "Email, password, and mainPath are required.",
+          success: false,
         });
       }
 
-      const songRef = db.collection("songs").doc(id);
-
-      const songDoc = await songRef.get();
-      if (!songDoc.exists) {
-        return res.status(404).json({ error: "Canción no encontrada." });
+      if (!email.endsWith("@beatscape.com")) {
+        return res.status(400).send({
+          error: "invalid-argument",
+          message: "Email must end with @beatscape.com.",
+          success: false,
+        });
       }
 
-      const updateData = {};
+      const userRecord = await auth.createUser({
+        email,
+        password,
+        displayName: displayName || "",
+      });
 
-      if (genre !== undefined) {
-        if (typeof genre === "string") {
-          updateData.genre = normalizeString(genre);
-        } else {
-          return res.status(400).json({
-            error: "El campo 'genre' debe ser una cadena de texto.",
-            ok: false,
-          });
-        }
-      }
+      const customClaims = {
+        cliendId: cliendId,
+        cliendInfo: cliendInfo,
+      };
 
-      if (hit !== undefined) {
-        if (typeof hit === "number") {
-          updateData.hit = hit;
-        } else {
-          return res
-            .status(400)
-            .json({ error: "El campo 'hit' debe ser un número.", ok: false });
-        }
-      }
+      await auth.setCustomUserClaims(userRecord.uid, customClaims);
 
-      if (energy !== undefined) {
-        if (typeof energy === "number") {
-          updateData.energy = energy;
-        } else {
-          return res.status(400).json({
-            error: "El campo 'energy' debe ser un número.",
-            ok: false,
-          });
-        }
-      }
-
-      await songRef.update(updateData);
-      const updatedSong = await songRef.get();
+      await db
+        .collection(`enterprises/${cliendId}/headquarters`)
+        .doc(userRecord.uid)
+        .set({
+          email: userRecord.email,
+          uid: userRecord.uid,
+          username: normalizeString(username),
+          displayName: userRecord.displayName,
+          canUseMultimedia: canUseMultimedia,
+          createdAt: new Date(),
+          status: true,
+        });
 
       return res.status(200).json({
-        message: "Canción actualizada exitosamente.",
+        message: "Usuario  creado.",
         data: updatedSong.data(),
         ok: true,
       });
     } catch (error) {
-      console.error("Error al editar la canción:", error);
-      return res
-        .status(500)
-        .json({ error: "Ocurrió un error al editar la canción." });
+      console.error("Error al editar creat:", error);
+      return res.status(500).json({ error: "Ocurrió un error al creat." });
     }
   });
 });
