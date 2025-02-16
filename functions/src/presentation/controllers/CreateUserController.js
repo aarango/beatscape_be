@@ -1,5 +1,4 @@
 // functions/index.js
-
 const { onRequest } = require("firebase-functions/v2/https");
 const { normalizeString } = require("@utils/normaliceString");
 const { db, auth } = require("@infrastructure/data/firebase/FirebaseConfig");
@@ -17,9 +16,6 @@ exports.createUser = onRequest((req, res) => {
     }
 
     try {
-      const idToken = authHeader.split("Bearer ")[1];
-      console.log("🚀 ~ cors ~ idToken:", idToken);
-
       const {
         email,
         password,
@@ -52,6 +48,30 @@ exports.createUser = onRequest((req, res) => {
         });
       }
 
+      // Validar que el email no exista
+      const existingUserByEmail = await auth
+        .getUserByEmail(email)
+        .catch(() => null);
+      if (existingUserByEmail) {
+        return res.status(400).json({
+          error: "email-already-in-use",
+          message: "El email ya está registrado.",
+        });
+      }
+
+      // Validar que el username no exista en la colección de headquarters
+      const usernameSnapshot = await db
+        .collection(`enterprises/${clientId}/headquarters`)
+        .doc(username)
+        .get();
+      if (usernameSnapshot.exists) {
+        return res.status(400).json({
+          error: "username-already-in-use",
+          message: "El nombre de usuario ya está registrado.",
+        });
+      }
+
+      // Crear el usuario en Firebase Authentication
       const userRecord = await auth.createUser({
         email,
         password,
@@ -63,8 +83,10 @@ exports.createUser = onRequest((req, res) => {
         clientInfo,
       };
 
+      // Establecer custom claims para el usuario
       await auth.setCustomUserClaims(userRecord.uid, customClaims);
 
+      // Crear documento del usuario en Firestore
       await db
         .collection(`enterprises/${clientId}/headquarters`)
         .doc(username)
