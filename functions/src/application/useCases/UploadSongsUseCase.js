@@ -15,11 +15,15 @@ const { loadMusicMetadata } = require("music-metadata");
  * @param {Object} params.db - Instancia de Firestore.
  * @returns {Promise<Object>} - Resultado con canciones procesadas y repeticiones.
  */
-async function UploadSongsUseCase({ song, db, storage }) {
+async function UploadSongsUseCase({ song, db, storage, clientId = null }) {
   const repeats = []; // Lista para canciones repetidas
 
   try {
-    const destinationPath = `songs/${song.title}`;
+    let destinationPath = `songs/${song.title}`;
+
+    if (clientId) {
+      destinationPath = `wedges/${clientId}/${song.title}`;
+    }
 
     // Cargar metadata del archivo
     const mm = await loadMusicMetadata();
@@ -70,8 +74,10 @@ async function UploadSongsUseCase({ song, db, storage }) {
       songHash: songHash,
     });
 
+    const path = clientId ? `wedges` : `songs`;
+
     const existingSongsSnapshot = await db
-      .collection("songs")
+      .collection(path)
       .where("songHash", "==", songHash)
       .limit(1)
       .get();
@@ -96,13 +102,14 @@ async function UploadSongsUseCase({ song, db, storage }) {
 
     modelSong.url = publicUrl;
 
-    const docRef = db.collection("songs").doc();
+    const docRef = db.collection(path).doc();
     const documentId = docRef.id;
 
     await docRef.set({
       ...modelSong,
       id: documentId,
       createdAt: new Date(),
+      clientId: clientId || "",
     });
 
     console.log(`Canción guardada con ID: ${documentId}`);

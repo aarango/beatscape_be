@@ -11,6 +11,7 @@ const {
 const { updateStatusByUser } = require("@controllers/updateStatusByUser");
 const { updateStatusClients } = require("@controllers/updateStatusClients");
 const { updateUser } = require("@controllers/updateUserController");
+const { uploadWedges } = require("@controllers/UploadBulkWedgesController");
 
 module.exports = {
   uploadBulk,
@@ -22,4 +23,5 @@ module.exports = {
   updateStatusByUser,
   updateStatusClients,
   updateUser,
+  uploadWedges,
 };

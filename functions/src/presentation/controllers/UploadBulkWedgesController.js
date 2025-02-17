@@ -14,7 +14,7 @@ const { storage, db } = require("@infrastructure/data/firebase/FirebaseConfig");
  * Función Cloud Function para subir múltiples canciones en bloque.
  * Endpoint: https://<REGION>-<PROJECT_ID>.cloudfunctions.net/uploadBulk
  */
-const UploadBulkWedgesController = onRequest(
+const uploadWedges = onRequest(
   {
     memory: "1GiB",
     timeoutSeconds: 300,
@@ -48,6 +48,17 @@ const UploadBulkWedgesController = onRequest(
 
       const tmpdir = os.tmpdir();
       const busboy = Busboy({ headers: req.headers });
+      let clientId;
+
+      busboy.on("field", (fieldname, val) => {
+        if (fieldname === "clientId") {
+          clientId = val;
+        }
+      });
+
+      if (!clientId) {
+        return res.status(400).json({ error: "clientId es requerido." });
+      }
 
       const uploads = [];
 
@@ -64,6 +75,10 @@ const UploadBulkWedgesController = onRequest(
 
           writeStream.on("close", async () => {
             try {
+              if (!clientId) {
+                throw new Error('Campo "clientId" es requerido.');
+              }
+
               const uploadedFile = await UploadSongsUseCase({
                 db,
                 storage,
@@ -71,6 +86,7 @@ const UploadBulkWedgesController = onRequest(
                   title: filename,
                   path: filepath,
                 },
+                clientId,
               });
 
               console.log(`Archivo subido: ${uploadedFile}`);
@@ -147,4 +163,4 @@ const UploadBulkWedgesController = onRequest(
   },
 );
 
-module.exports = { UploadBulkWedgesController };
+module.exports = { uploadWedges };
