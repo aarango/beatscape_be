@@ -10,6 +10,7 @@ const {
 } = require("@controllers/UpdateCalendarByUserController");
 const { updateStatusByUser } = require("@controllers/updateStatusByUser");
 const { updateStatusClients } = require("@controllers/updateStatusClients");
+const { updateUser } = require("@controllers/updateUserController");
 
 module.exports = {
   uploadBulk,
@@ -20,4 +21,5 @@ module.exports = {
   updateCalendarByUser,
   updateStatusByUser,
   updateStatusClients,
+  updateUser,
 };
