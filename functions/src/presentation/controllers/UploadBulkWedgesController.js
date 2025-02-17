@@ -48,19 +48,16 @@ const uploadWedges = onRequest(
 
       const tmpdir = os.tmpdir();
       const busboy = Busboy({ headers: req.headers });
-      let clientId;
 
+      const uploads = [];
+      let clientId = null;
+
+      // Capturar campo clientId
       busboy.on("field", (fieldname, val) => {
         if (fieldname === "clientId") {
           clientId = val;
         }
       });
-
-      if (!clientId) {
-        return res.status(400).json({ error: "clientId es requerido." });
-      }
-
-      const uploads = [];
 
       busboy.on("file", (fieldname, file, { filename }) => {
         const filepath = path.join(tmpdir, filename);
@@ -75,10 +72,7 @@ const uploadWedges = onRequest(
 
           writeStream.on("close", async () => {
             try {
-              if (!clientId) {
-                throw new Error('Campo "clientId" es requerido.');
-              }
-
+              console.log("clientId", clientId);
               const uploadedFile = await UploadSongsUseCase({
                 db,
                 storage,
@@ -86,7 +80,7 @@ const uploadWedges = onRequest(
                   title: filename,
                   path: filepath,
                 },
-                clientId,
+                clientId: clientId,
               });
 
               console.log(`Archivo subido: ${uploadedFile}`);

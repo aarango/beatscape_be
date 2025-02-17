@@ -74,7 +74,7 @@ async function UploadSongsUseCase({ song, db, storage, clientId = null }) {
       songHash: songHash,
     });
 
-    const path = clientId ? `wedges` : `songs`;
+    const path = clientId ? "wedges" : "songs";
 
     const existingSongsSnapshot = await db
       .collection(path)
