@@ -72,6 +72,8 @@ async function UploadSongsUseCase({ song, db, storage, clientId = null }) {
       lossless: metadata.format.lossless || false,
       numberOfSamples: metadata.format.numberOfSamples || 0,
       songHash: songHash,
+      hit: metadata.common?.bpm ? metadata.common?.bpm : 0,
+      energy: metadata.common?.disk?.no ? metadata.common?.disk?.no : 0,
     });
 
     const path = clientId ? "wedges" : "songs";
